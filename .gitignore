@@ -1,0 +1,43 @@
+# ---------------------------
+# Node / Frontend
+# ---------------------------
+node_modules/
+dist/
+.vite/
+.env
+npm-debug.log*
+yarn-error.log*
+
+# ---------------------------
+# Python / Backend
+# ---------------------------
+__pycache__/
+*.py[cod]
+*.env
+*.pyo
+*.pyd
+*.pytest_cache/
+*.mypy_cache/
+venv/
+.env
+
+# ---------------------------
+# Docker / Volumes
+# ---------------------------
+data/db/
+frontend/node_modules/
+backend/__pycache__/
+
+# ---------------------------
+# IDE / Editor
+# ---------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*.DS_Store
+
+# ---------------------------
+# Logs
+# ---------------------------
+*.log
