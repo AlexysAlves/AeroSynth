@@ -12,6 +12,7 @@ services:
       - redis
     volumes:
       - ./backend:/app
+      - ./data/uploads:/data/uploads
 
   frontend:
     build: ./frontend
@@ -41,3 +42,16 @@ services:
     container_name: imagens-redis
     ports:
       - "6379:6379"
+
+  worker:
+    build: ./backend
+    command: celery -A app.celery_app worker --loglevel=info
+    depends_on:
+      - redis
+      - db
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app
+      - ./data/uploads:/data/uploads
+
