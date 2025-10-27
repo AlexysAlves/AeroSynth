@@ -4,6 +4,7 @@ import os, shutil, uuid
 from sqlalchemy.orm import Session
 from .db import SessionLocal, engine, Base
 from .models.image import Image, ImageStatus
+from .tasks import process_image
 
 Base.metadata.create_all(bind=engine)  # cria tabelas
 
@@ -37,6 +38,7 @@ async def upload_image(file: UploadFile = File(...), db: Session = Depends(get_d
     db.add(img)
     db.commit()
     db.refresh(img)
+    process_image.delay(img.id)
     return JSONResponse({"id": img.id, "filename": img.filename, "status": img.status.value})
 
 @app.get("/images")

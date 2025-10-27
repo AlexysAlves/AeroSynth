@@ -45,7 +45,8 @@ services:
 
   worker:
     build: ./backend
-    command: celery -A app.celery_app worker --loglevel=info
+    container_name: imagens-worker
+    command: celery -A app.celery_app.celery worker --loglevel=info -Q images
     depends_on:
       - redis
       - db
@@ -54,4 +55,5 @@ services:
     volumes:
       - ./backend:/app
       - ./data/uploads:/data/uploads
+    restart: unless-stopped
 
