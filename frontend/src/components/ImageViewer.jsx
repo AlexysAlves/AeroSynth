@@ -25,28 +25,51 @@ export default function ImageViewer({ image }) {
     })();
   }, [image, API]);
 
-  useEffect(() => {
+useEffect(() => {
     setError(null);
     if (!detail) return;
     const filename = detail.filename || detail.original_name || "";
     const isRaster = /\.(tif|tiff)$/i.test(filename);
     const isImg = /\.(jpg|jpeg|png)$/i.test(filename);
-
-    if (isImg) return;
-
+  
+    if (isImg) return; 
+  
     if (isRaster) {
       (async () => {
         setLoading(true);
         try {
           const resp = await fetch(`${API}/images/${detail.id}/download`);
           if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-          const buffer = await resp.arrayBuffer();
-          const tiff = await GeoTIFF.fromArrayBuffer(buffer);
+          const arrayBuffer = await resp.arrayBuffer();
+  
+          let fromArrayBufferFn = null;
+          try {
+            const mod = await import("geotiff");
+            fromArrayBufferFn =
+              mod.fromArrayBuffer ||
+              (mod.default && mod.default.fromArrayBuffer) ||
+              (mod.GeoTIFF && mod.GeoTIFF.fromArrayBuffer) ||
+              null;
+          } catch (errImport) {
+            fromArrayBufferFn = null;
+          }
+  
+          if (!fromArrayBufferFn) {
+            throw new Error("geotiff.fromArrayBuffer não disponível na versão do pacote. Verifique a instalação de 'geotiff'.");
+          }
+  
+          const tiff = await fromArrayBufferFn(arrayBuffer);
           const image0 = await tiff.getImage();
-          const rasters = await image0.readRasters({ interleave: true });
+          let rasters;
+          try {
+            rasters = await image0.readRasters({ interleave: true });
+          } catch (e) {
+            rasters = await image0.readRasters();
+          }
+  
           const width = image0.getWidth();
           const height = image0.getHeight();
-
+  
           const canvas = canvasRef.current;
           const MAX = 1200;
           let scale = 1;
@@ -60,33 +83,57 @@ export default function ImageViewer({ image }) {
           }
           const ctx = canvas.getContext("2d");
           const imgData = ctx.createImageData(canvas.width, canvas.height);
-
-          const src = rasters; 
-          const step = Math.round(1 / scale) || 1;
-          let j = 0;
-          for (let y = 0; y < height; y += step) {
-            for (let x = 0; x < width; x += step) {
-              const si = (y * width + x) * 3; 
-              const r = src[si] ?? 0;
-              const g = src[si + 1] ?? r;
-              const b = src[si + 2] ?? r;
-              imgData.data[j++] = r;
-              imgData.data[j++] = g;
-              imgData.data[j++] = b;
-              imgData.data[j++] = 255;
+  
+          if (rasters instanceof Uint8Array || Object.prototype.toString.call(rasters).includes("Uint8")) {
+            const src = rasters;
+            const bands = 3; 
+            const step = Math.round(1 / scale) || 1;
+            let dstIndex = 0;
+            for (let y = 0; y < height; y += step) {
+              for (let x = 0; x < width; x += step) {
+                const si = (y * width + x) * bands;
+                const r = src[si] ?? 0;
+                const g = src[si + 1] ?? r;
+                const b = src[si + 2] ?? r;
+                imgData.data[dstIndex++] = r;
+                imgData.data[dstIndex++] = g;
+                imgData.data[dstIndex++] = b;
+                imgData.data[dstIndex++] = 255;
+              }
             }
+          } else if (Array.isArray(rasters)) {
+            const band0 = rasters[0];
+            const band1 = rasters[1];
+            const band2 = rasters[2];
+            const step = Math.round(1 / scale) || 1;
+            let dstIndex = 0;
+            for (let y = 0; y < height; y += step) {
+              for (let x = 0; x < width; x += step) {
+                const idx = y * width + x;
+                const r = band0 ? band0[idx] : 0;
+                const g = band1 ? band1[idx] : r;
+                const b = band2 ? band2[idx] : r;
+                imgData.data[dstIndex++] = r;
+                imgData.data[dstIndex++] = g;
+                imgData.data[dstIndex++] = b;
+                imgData.data[dstIndex++] = 255;
+              }
+            }
+          } else {
+            throw new Error("Formato de rasters inesperado");
           }
+  
           ctx.putImageData(imgData, 0, 0);
         } catch (err) {
-          console.error(err);
-          setError("Erro ao renderizar TIFF no browser.");
+          console.error("Erro ao processar TIFF:", err);
+          setError("Erro ao renderizar TIFF no browser — veja console para detalhes.");
         } finally {
           setLoading(false);
         }
       })();
     }
-  }, [detail, API]);
-
+  }, [detail]);
+  
   if (!image) return <div className="p-4">Selecione uma imagem à direita.</div>;
 
   const downloadUrl = `${API}/images/${image.id}/download`;
