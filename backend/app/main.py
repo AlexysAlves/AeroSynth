@@ -5,12 +5,26 @@ from sqlalchemy.orm import Session
 from .db import SessionLocal, engine, Base
 from .models.image import Image, ImageStatus
 from .tasks import process_image
+from fastapi.middleware.cors import CORSMiddleware
 
-Base.metadata.create_all(bind=engine)  # cria tabelas
+Base.metadata.create_all(bind=engine)  
 
 app = FastAPI(title="AeroSynth API")
 
-# Dependency
+
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,   
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 def get_db():
     db = SessionLocal()
     try:
@@ -53,7 +67,6 @@ def get_image(image_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Imagem não encontrada")
     return {"id": img.id, "filename": img.filename, "original_name": img.original_name, "status": img.status.value, "storage_url": img.storage_url}
 
-# endpoint para baixar o arquivo (opcional)
 @app.get("/images/{image_id}/download")
 def download_image(image_id: int, db: Session = Depends(get_db)):
     img = db.query(Image).get(image_id)
