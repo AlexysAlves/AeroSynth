@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import GeoTIFF from "geotiff";
+import MapPanel from "./MapPanel";
 
 export default function ImageViewer({ image }) {
   const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -12,8 +13,6 @@ export default function ImageViewer({ image }) {
     setError(null);
     setDetail(null);
     if (!image) return;
-
-    // busca detalhe atualizado (inclui meta)
     (async () => {
       try {
         const res = await fetch(`${API}/images/${image.id}`);
@@ -26,7 +25,6 @@ export default function ImageViewer({ image }) {
     })();
   }, [image, API]);
 
-  // renderiza TIFF em canvas (se for TIFF)
   useEffect(() => {
     setError(null);
     if (!detail) return;
@@ -34,7 +32,7 @@ export default function ImageViewer({ image }) {
     const isRaster = /\.(tif|tiff)$/i.test(filename);
     const isImg = /\.(jpg|jpeg|png)$/i.test(filename);
 
-    if (isImg) return; // <img> no JSX fará o trabalho
+    if (isImg) return;
 
     if (isRaster) {
       (async () => {
@@ -50,7 +48,6 @@ export default function ImageViewer({ image }) {
           const height = image0.getHeight();
 
           const canvas = canvasRef.current;
-          // limit canvas max dimensions to avoid browser OOM (scale if very large)
           const MAX = 1200;
           let scale = 1;
           if (width > MAX || height > MAX) {
@@ -64,14 +61,12 @@ export default function ImageViewer({ image }) {
           const ctx = canvas.getContext("2d");
           const imgData = ctx.createImageData(canvas.width, canvas.height);
 
-          // build image data from rasters (simple resampling if scaled)
-          const src = rasters; // interleaved
-          // naive mapping: sample every nth pixel if scale < 1
+          const src = rasters; 
           const step = Math.round(1 / scale) || 1;
           let j = 0;
           for (let y = 0; y < height; y += step) {
             for (let x = 0; x < width; x += step) {
-              const si = (y * width + x) * 3; // assume RGB interleaved
+              const si = (y * width + x) * 3; 
               const r = src[si] ?? 0;
               const g = src[si + 1] ?? r;
               const b = src[si + 2] ?? r;
@@ -110,7 +105,11 @@ export default function ImageViewer({ image }) {
           <pre className="text-xs bg-gray-50 p-2 rounded">{JSON.stringify(detail.meta, null, 2)}</pre>
         </div>
       )}
-
+      {detail?.meta?.bounds && (
+        <div className="my-4">
+            <MapPanel bounds={detail.meta.bounds} />
+        </div>
+)}
       {isImg && <img src={downloadUrl} alt={filename} className="max-w-full border" />}
 
       {isTiff && (
