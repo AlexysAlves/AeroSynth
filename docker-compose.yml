@@ -13,6 +13,7 @@ services:
     volumes:
       - ./backend:/app
       - ./data/uploads:/data/uploads
+    restart: unless-stopped
 
   frontend:
     build: ./frontend

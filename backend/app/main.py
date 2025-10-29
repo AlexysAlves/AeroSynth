@@ -6,6 +6,7 @@ from .db import SessionLocal, engine, Base
 from .models.image import Image, ImageStatus
 from .tasks import process_image
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 Base.metadata.create_all(bind=engine)  
 
@@ -24,6 +25,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/data/uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 def get_db():
     db = SessionLocal()
@@ -56,16 +61,37 @@ async def upload_image(file: UploadFile = File(...), db: Session = Depends(get_d
     return JSONResponse({"id": img.id, "filename": img.filename, "status": img.status.value})
 
 @app.get("/images")
-def list_images(limit: int = 50, offset: int = 0, db: Session = Depends(get_db)):
-    rows = db.query(Image).order_by(Image.uploaded_at.desc()).offset(offset).limit(limit).all()
-    return [{"id": r.id, "filename": r.filename, "original_name": r.original_name, "status": r.status.value, "uploaded_at": r.uploaded_at.isoformat()} for r in rows]
+def list_images(db: Session = Depends(get_db)):
+    images = db.query(Image).all()
+    out = []
+    for img in images:
+        meta = img.meta or {}
+        thumb = meta.get("thumbnail_url")
+        out.append({
+            "id": img.id,
+            "original_name": img.original_name,
+            "filename": img.filename,
+            "status": img.status.value,
+            "uploaded_at": img.uploaded_at.isoformat() if img.uploaded_at else None,
+            "thumbnail_url": thumb
+        })
+    return out
 
 @app.get("/images/{image_id}")
 def get_image(image_id: int, db: Session = Depends(get_db)):
     img = db.query(Image).get(image_id)
     if not img:
         raise HTTPException(status_code=404, detail="Imagem não encontrada")
-    return {"id": img.id, "filename": img.filename, "original_name": img.original_name, "status": img.status.value, "storage_url": img.storage_url}
+    meta = img.meta or {}
+    return {
+        "id": img.id,
+        "filename": img.filename,
+        "original_name": img.original_name,
+        "status": img.status.value,
+        "storage_url": img.storage_url,
+        "meta": meta,
+        "thumbnail_url": meta.get("thumbnail_url")
+    }
 
 @app.get("/images/{image_id}/download")
 def download_image(image_id: int, db: Session = Depends(get_db)):
