@@ -153,9 +153,9 @@ useEffect(() => {
         </div>
       )}
       {detail?.meta?.bounds && (
-        <div className="my-4">
-            <MapPanel bounds={detail.meta.bounds} />
-        </div>
+  <div className="my-4">
+    <MapPanel bounds={detail.meta.bounds} thumbnailUrl={detail.meta.thumbnail_url ? `${API}${detail.meta.thumbnail_url}` : null} />
+  </div>
 )}
       {isImg && <img src={downloadUrl} alt={filename} className="max-w-full border" />}
 
