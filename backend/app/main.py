@@ -7,6 +7,11 @@ from .models.image import Image, ImageStatus
 from .tasks import process_image
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from typing import List
+from fastapi import WebSocket, WebSocketDisconnect, Request
+import asyncio
+
+
 
 Base.metadata.create_all(bind=engine)  
 
@@ -99,3 +104,49 @@ def download_image(image_id: int, db: Session = Depends(get_db)):
     if not img:
         raise HTTPException(status_code=404, detail="Imagem não encontrada")
     return FileResponse(img.storage_url, filename=img.original_name)
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        try:
+            self.active_connections.remove(websocket)
+        except ValueError:
+            pass
+
+    async def broadcast(self, message: dict):
+        living = []
+        for ws in list(self.active_connections):
+            try:
+                await ws.send_json(message)
+                living.append(ws)
+            except Exception:
+                try:
+                    await ws.close()
+                except Exception:
+                    pass
+        self.active_connections = living
+
+manager = ConnectionManager()
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()  
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception:
+        manager.disconnect(websocket)
+
+@app.post("/notify")
+async def notify(request: Request):
+    payload = await request.json()
+    asyncio.create_task(manager.broadcast(payload))
+    return {"ok": True}

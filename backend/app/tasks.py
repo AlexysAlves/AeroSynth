@@ -2,6 +2,7 @@ from .celery_app import celery
 from .db import SessionLocal
 from .models.image import Image, ImageStatus
 import os, subprocess, json, traceback, uuid
+import requests
 
 THUMB_DIR = os.getenv("UPLOAD_DIR", "/data/uploads").rstrip("/") + "/thumbnails"
 os.makedirs(THUMB_DIR, exist_ok=True)
@@ -97,6 +98,16 @@ def process_image(self, image_id: int):
         img.meta = meta
         img.status = ImageStatus.done
         db.commit()
+        try:
+            backend_notify_url = os.getenv("BACKEND_INTERNAL_URL", "http://backend:8000/notify")
+            payload = {
+                "id": img.id,
+                "status": img.status.value,
+                "meta": img.meta or {}
+            }
+            requests.post(backend_notify_url, json=payload, timeout=5)
+        except Exception as e:
+            print("notify failed:", e)
         return {"status": "done", "thumbnail": meta["thumbnail_url"]}
 
     except Exception as e:
